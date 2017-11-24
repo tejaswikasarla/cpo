@@ -1,5 +1,5 @@
 from sandbox.cpo.policy_gradient_safe import PolicyGradientSafe
-from sandbox.conjugate_constraint_optimizer import ConjugateConstraintOptimizer
+from sandbox.cpo.conjugate_constraint_optimizer import ConjugateConstraintOptimizer
 from rllab.core.serializable import Serializable
 
 
