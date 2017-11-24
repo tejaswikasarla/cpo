@@ -7,12 +7,12 @@ This module was designed for [rllab](https://github.com/openai/rllab) [2], and i
 - [Primal-Dual Optimization](https://github.com/jachiam/cpo/blob/master/algos/safe/pdo.py)
 - [Fixed Penalty Optimization](https://github.com/jachiam/cpo/blob/master/algos/safe/fpo.py)
 
-described in our paper [1]. 
+described in the given paper [1]. 
 
 To configure, run the following command in the root folder of `rllab`:
 
 ```bash
-git submodule add -f https://github.com/jachiam/cpo sandbox/cpo
+git submodule add -f https://github.com/tkasarla/cpo sandbox/cpo
 ```
 
 Run CPO in the Point-Gather environment with
