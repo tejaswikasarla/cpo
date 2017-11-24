@@ -16,7 +16,7 @@ import theano
 import theano.tensor as TT
 
 
-from sandbox.cpo.algos.safe.sampler_safe import BatchSamplerSafe
+from sandbox.cpo.sampler_safe import BatchSamplerSafe
 
 class PolicyGradientSafe(BatchPolopt, Serializable):
     """
