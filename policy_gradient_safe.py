@@ -15,7 +15,6 @@ import rllab.misc.logger as logger
 import theano
 import theano.tensor as TT
 
-
 from sandbox.cpo.sampler_safe import BatchSamplerSafe
 
 class PolicyGradientSafe(BatchPolopt, Serializable):
