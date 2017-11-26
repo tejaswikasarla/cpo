@@ -20,12 +20,6 @@ from sandbox.cpo.cpo import CPO
 from sandbox.cpo.conjugate_gradient_optimizer import ConjugateGradientOptimizer
 from sandbox.cpo.gather import GatherSafetyConstraint
 
-
-
-
-ec2_mode = False
-
-
 def run_task(*_):
         trpo_stepsize = 0.01
         trpo_subsample_factor = 0.2
@@ -61,8 +55,6 @@ def run_task(*_):
 
         safety_constraint = GatherSafetyConstraint(max_value=0.1, baseline=safety_baseline)
 
-
-
         algo = CPO(
             env=env,
             policy=policy,
@@ -82,13 +74,13 @@ def run_task(*_):
         algo.train()
 
 
-run_experiment_lite(
+run_experiment_lite (
     run_task,
     n_parallel=4,
     snapshot_mode="last",
     exp_prefix='CPO-PointGather',
     seed=1,
-    mode = "ec2" if ec2_mode else "local"
+    mode = "local"
     #plot=True
 )
 
