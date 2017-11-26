@@ -9,6 +9,50 @@ import numpy as np
 from rllab.misc.ext import sliced_fun
 from _ast import Num
 
+class PerlmutterHvp(Serializable):
+
+    def __init__(self, num_slices=1):
+        Serializable.quick_init(self, locals())
+        self.target = None
+        self.reg_coeff = None
+        self.opt_fun = None
+        self._num_slices = num_slices
+
+    def update_opt(self, f, target, inputs, reg_coeff):
+        self.target = target
+        self.reg_coeff = reg_coeff
+        params = target.get_params(trainable=True)
+
+        constraint_grads = theano.grad(
+            f, wrt=params, disconnected_inputs='warn')
+        xs = tuple([ext.new_tensor_like("%s x" % p.name, p) for p in params])
+
+        def Hx_plain():
+            Hx_plain_splits = TT.grad(
+                TT.sum([TT.sum(g * x)
+                        for g, x in zip(constraint_grads, xs)]),
+                wrt=params,
+                disconnected_inputs='warn'
+            )
+            return TT.concatenate([TT.flatten(s) for s in Hx_plain_splits])
+
+        self.opt_fun = ext.lazydict(
+            f_Hx_plain=lambda: ext.compile_function(
+                inputs=inputs + xs,
+                outputs=Hx_plain(),
+                log_name="f_Hx_plain",
+            ),
+        )
+
+    def build_eval(self, inputs):
+        def eval(x):
+            xs = tuple(self.target.flat_to_params(x, trainable=True))
+            ret = sliced_fun(self.opt_fun["f_Hx_plain"], self._num_slices)(
+                inputs, xs) + self.reg_coeff * x
+            return ret
+
+        return eval
+        
 class ConjugateGradientOptimizer(Serializable):
     """
     Performs constrained optimization via line search. The search direction is computed using a conjugate gradient
