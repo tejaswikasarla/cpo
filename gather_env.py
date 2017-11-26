@@ -15,15 +15,11 @@ from rllab.envs.mujoco.gather.embedded_viewer import EmbeddedViewer
 from rllab.envs.mujoco.mujoco_env import MODEL_DIR, BIG
 from rllab.misc import autoargs
 from rllab.misc.overrides import overrides
-from rllab.mujoco_py import MjViewer, MjModel, mjcore, mjlib, \
-    mjextra, glfw
-
-
+from rllab.mujoco_py import MjViewer, MjModel, mjcore, mjlib, mjextra, glfw
 from sandbox.cpo.point_env import PointEnv
 
 APPLE = 0
 BOMB = 1
-
 
 class GatherViewer(MjViewer):
     def __init__(self, env):

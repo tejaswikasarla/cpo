@@ -7,8 +7,6 @@ from rllab.misc import special
 from rllab.misc import tensor_utils
 from rllab.algos import util
 
-
-
 def local_truncate_paths(paths, max_samples):
     """
     Truncate the list of paths so that the total number of samples is almost equal to max_samples. This is done by
@@ -24,8 +22,6 @@ def local_truncate_paths(paths, max_samples):
     while len(paths) > 0 and total_n_samples - len(paths[-1]["rewards"]) >= max_samples:
         total_n_samples -= len(paths.pop(-1)["rewards"])
     return paths
-
-
 
 class BatchSamplerSafe(Sampler):
     def __init__(self, algo, **kwargs):
@@ -86,9 +82,7 @@ class BatchSamplerSafe(Sampler):
 
         return paths
 
-
     def process_samples(self, itr, paths):
-
         """
         we will ignore paths argument and only use experience replay.
         note: if algo.batch_aggregate_n = 1, then the experience replay will
@@ -131,7 +125,6 @@ class BatchSamplerSafe(Sampler):
 
 
     def compute_exploration_bonuses_and_statistics(self):
-
         for paths in self.experience_replay: 
             for path in paths:
                 path["bonuses"] = self.algo.exploration_bonus.get_bonus(path)
@@ -315,7 +308,6 @@ class BatchSamplerSafe(Sampler):
         for k in self.algo.policy.distribution.dist_info_keys:
             path["agent_infos"][k] = cur_dist_info[k]
 
-
     def compute_and_apply_importance_weights(self,path):
         new_logli = self.algo.policy.distribution.log_likelihood(path["actions"],path["agent_infos"])
         logli_diff = new_logli - path["log_likelihood"]
@@ -332,10 +324,7 @@ class BatchSamplerSafe(Sampler):
 
         path["IS_coeff"] = IS_coeff
 
-
-
     def create_samples_dict(self, paths):
-
         if self.algo.safety_constraint:
             if self.use_safety_bonus:
                 safety_key = 'safety_robust' + self.algo.safety_key[6:]
@@ -373,7 +362,6 @@ class BatchSamplerSafe(Sampler):
             )
 
             if self.algo.safety_constraint:
-
                 safety_vals = tensor_utils.concat_tensor_list([path[safety_key] for path in paths])
                 samples_data['safety_values'] = safety_vals     # for gradient calculation
                 if self.algo.center_safety_vals:
@@ -382,7 +370,6 @@ class BatchSamplerSafe(Sampler):
 
         else:
             max_path_length = max([len(path["advantages"]) for path in paths])
-
             # make all paths the same length (pad extra advantages with 0)
             obs = [path["observations"] for path in paths]
             obs = tensor_utils.pad_tensor_n(obs, max_path_length)
@@ -422,7 +409,7 @@ class BatchSamplerSafe(Sampler):
             valids = [np.ones_like(path["returns"]) for path in paths]
             valids = tensor_utils.pad_tensor_n(valids, max_path_length)
 
-            samples_data = dict(
+            samples_data = dict (
                 observations=obs,
                 actions=actions,
                 advantages=adv,
@@ -437,7 +424,6 @@ class BatchSamplerSafe(Sampler):
 
 
             if self.algo.safety_constraint:
-
                 safety_vals = [path[safety_key] for path in paths]
                 if self.algo.center_safety_vals:
                     samples_data['safety_offset'] = np.mean(safety_vals)

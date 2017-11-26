@@ -2,7 +2,6 @@ from sandbox.cpo.policy_gradient_safe import PolicyGradientSafe
 from sandbox.cpo.conjugate_constraint_optimizer import ConjugateConstraintOptimizer
 from rllab.core.serializable import Serializable
 
-
 class CPO(PolicyGradientSafe, Serializable):
     """
     Constrained Policy Optimization
@@ -21,7 +20,6 @@ class CPO(PolicyGradientSafe, Serializable):
             if optimizer_args is None:
                 optimizer_args = dict()
             optimizer = ConjugateConstraintOptimizer(**optimizer_args)
-
 
         if 'safety_constrained_optimizer' in kwargs.keys():
             kwargs.pop('safety_constrained_optimizer')
