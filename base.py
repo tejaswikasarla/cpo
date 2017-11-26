@@ -1,10 +1,9 @@
-from rllab.core.parameterized import Parameterized
-from rllab.core.serializable import Serializable
 import rllab.misc.logger as logger
 
+from rllab.core.parameterized import Parameterized
+from rllab.core.serializable import Serializable
 
 class SafetyConstraint(object):
-
     def __init__(self, max_value=1., baseline=None, **kwargs):
         self.max_value = max_value
         self.has_baseline = baseline is not None
