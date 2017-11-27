@@ -75,7 +75,7 @@ def run_task(*_):
 
 run_experiment_lite (
     run_task,
-    n_parallel=4,
+    n_parallel=1,
     snapshot_mode="last",
     exp_prefix='CPO-PointGather',
     seed=1,
