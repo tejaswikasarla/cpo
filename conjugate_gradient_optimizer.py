@@ -54,11 +54,6 @@ class PerlmutterHvp(Serializable):
         return eval
         
 class ConjugateGradientOptimizer(Serializable):
-    """
-    Performs constrained optimization via line search. The search direction is computed using a conjugate gradient
-    algorithm, which gives x = A^{-1}g, where A is a second order approximation of the constraint and g is the gradient
-    of the loss function.
-    """
     def __init__(
             self,
             cg_iters=10,
@@ -69,16 +64,6 @@ class ConjugateGradientOptimizer(Serializable):
             accept_violation=False,
             hvp_approach=None,
             num_slices=1):
-        """
-
-        :param cg_iters: The number of CG iterations used to calculate A^-1 g
-        :param reg_coeff: A small value so that A -> A + reg*I
-        :param subsample_factor: Subsampling factor to reduce samples when using "conjugate gradient. Since the
-        computation time for the descent direction dominates, this can greatly reduce the overall computation time.
-        :param accept_violation: whether to accept the descent step if it violates the line search condition after
-        exhausting all backtracking budgets
-        :return:
-        """
         Serializable.quick_init(self, locals())
         self._cg_iters = cg_iters
         self._reg_coeff = reg_coeff
@@ -98,16 +83,6 @@ class ConjugateGradientOptimizer(Serializable):
 
     def update_opt(self, loss, target, leq_constraint, inputs, extra_inputs=None, constraint_name="constraint", *args,
                    **kwargs):
-        """
-        :param loss: Symbolic expression for the loss function.
-        :param target: A parameterized object to optimize over. It should implement methods of the
-        :class:`rllab.core.paramerized.Parameterized` class.
-        :param leq_constraint: A constraint provided as a tuple (f, epsilon), of the form f(*inputs) <= epsilon.
-        :param inputs: A list of symbolic variables as inputs, which could be subsampled if needed. It is assumed
-        that the first dimension of these inputs should correspond to the number of data points
-        :param extra_inputs: A list of symbolic variables as extra inputs which should not be subsampled
-        :return: No return value.
-        """
 
         inputs = tuple(inputs)
         if extra_inputs is None:
@@ -235,6 +210,3 @@ class ConjugateGradientOptimizer(Serializable):
                 logger.log(
                     "Violated because constraint %s is violated" % self._constraint_name)
             self._target.set_param_values(prev_param, trainable=True)
-        logger.log("backtrack iters: %d" % n_iter)
-        logger.log("computing loss after")
-        logger.log("optimization finished")

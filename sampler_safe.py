@@ -8,15 +8,6 @@ from rllab.misc import tensor_utils
 from rllab.algos import util
 
 def local_truncate_paths(paths, max_samples):
-    """
-    Truncate the list of paths so that the total number of samples is almost equal to max_samples. This is done by
-    removing extra paths at the end of the list. But here, we do NOT make the last path shorter.
-    :param paths: a list of paths
-    :param max_samples: the absolute maximum number of samples
-    :return: a list of paths, truncated so that the number of samples adds up to max-samples
-    """
-    # chop samples collected by extra paths
-    # make a copy
     paths = list(paths)
     total_n_samples = sum(len(path["rewards"]) for path in paths)
     while len(paths) > 0 and total_n_samples - len(paths[-1]["rewards"]) >= max_samples:
@@ -25,9 +16,6 @@ def local_truncate_paths(paths, max_samples):
 
 class BatchSamplerSafe(Sampler):
     def __init__(self, algo, **kwargs):
-        """
-        :type algo: BatchPolopt
-        """
         self.algo = algo
         self.experience_replay = []     # list of sample batches
         self.env_interacts_memory = []  # list of how many env interacts are in each batch
@@ -58,22 +46,18 @@ class BatchSamplerSafe(Sampler):
             scope=self.algo.scope,
         )
 
-        """log_likelihoods for importance sampling"""
         for path in paths:
             logli = self.algo.policy.distribution.log_likelihood(path["actions"],path["agent_infos"])
             path["log_likelihood"] = logli
 
 
-        """keep data use per iteration approximately fixed"""
         if not(self.algo.all_paths):
             paths = local_truncate_paths(paths, self.algo.batch_size)
 
-        """keep track of path length"""
         self.env_interacts = sum([len(path["rewards"]) for path in paths])
         self.total_env_interacts += self.env_interacts
         self.mean_path_len = float(self.env_interacts)/len(paths)
 
-        """manage experience replay for old batch reuse"""
         self.experience_replay.append(paths)
         self.env_interacts_memory.append(self.env_interacts)
         if len(self.experience_replay) > self.algo.batch_aggregate_n:
@@ -82,13 +66,7 @@ class BatchSamplerSafe(Sampler):
 
         return paths
 
-    def process_samples(self, itr, paths):
-        """
-        we will ignore paths argument and only use experience replay.
-        note: if algo.batch_aggregate_n = 1, then the experience replay will
-        only contain the most recent batch, and so len(all_paths) == 1.
-        """
-        
+    def process_samples(self, itr, paths):    
         if self.algo.exploration_bonus:
             self.compute_exploration_bonuses_and_statistics()
 
@@ -107,18 +85,13 @@ class BatchSamplerSafe(Sampler):
 
         all_evs = all_evs[::-1]     # most recent is now at element 0
 
-        """
-        importance sampling if old data is used
-        """
         if self.algo.batch_aggregate_n > 1 and self.algo.importance_sampling:
             self.compute_all_importance_weights(ignore_age_0=True)
 
         samples_data = self.create_samples_dict(all_paths)
 
-        """log all useful info"""
         self.record_statistics(itr, all_paths, all_evs, samples_data)
 
-        """update vf, exploration bonus, and safety model"""
         self.update_parametrized_models()
 
         return samples_data
@@ -129,7 +102,6 @@ class BatchSamplerSafe(Sampler):
             for path in paths:
                 path["bonuses"] = self.algo.exploration_bonus.get_bonus(path)
 
-        """ total and mean over all of memory """
         self.bonus_total =  sum([
                                 sum([
                                     sum(path["bonuses"])
@@ -138,7 +110,6 @@ class BatchSamplerSafe(Sampler):
 
         self.bonus_mean = self.bonus_total / sum(self.env_interacts_memory)
 
-        """ total and mean over most recent batch of data """
         self.new_bonus_total = sum([sum(path["bonuses"]) for path in self.experience_replay[-1]])
         self.new_bonus_mean = self.new_bonus_total / self.env_interacts_memory[-1]
 
@@ -157,7 +128,6 @@ class BatchSamplerSafe(Sampler):
 
     
     def compute_epoch_weights(self):
-        """create weights, with highest weight on most recent batch"""
         self.raw_weights = np.array(
                         [self.algo.batch_aggregate_coeff**j for j in range(len(self.experience_replay))],
                         dtype='float'
@@ -167,7 +137,6 @@ class BatchSamplerSafe(Sampler):
         self.weights = self.raw_weights.copy()
 
         if self.algo.relative_weights:
-            """reweight the weights by how many paths are in that batch """
             total_paths = sum([len(paths) for paths in self.experience_replay])
             for j in range(len(self.weights)):
                 self.weights[j] *= total_paths / len(self.experience_replay[j])
@@ -196,7 +165,6 @@ class BatchSamplerSafe(Sampler):
                      self.algo.discount * path_baselines[1:] - \
                      path_baselines[:-1]
 
-            """exploration bonuses"""
             if self.algo.exploration_bonus:
                 path["bonuses"] *= self.algo.exploration_lambda
                 if self.algo.normalize_bonus:
@@ -209,7 +177,6 @@ class BatchSamplerSafe(Sampler):
                 deltas, self.algo.discount * self.algo.gae_lambda)
             path["returns"] = special.discount_cumsum(path["rewards"], self.algo.discount)
 
-            """safety constraint values"""
             if self.algo.safety_constraint:
 
                 path["safety_returns"] = \
@@ -270,7 +237,6 @@ class BatchSamplerSafe(Sampler):
         return ev
 
     def compute_all_importance_weights(self,ignore_age_0=False):
-        """record the IS_coeffs"""
         self.IS_coeffs = [[] for paths in self.experience_replay]
         for paths, weight, age in zip(self.experience_replay,self.weights,self.age):
             if age==0 and ignore_age_0:
@@ -283,11 +249,8 @@ class BatchSamplerSafe(Sampler):
             self.IS_coeffs[age] = [path["IS_coeff"] for path in paths]
 
 
-    # unused, for debug only
     def compute_batch_importance_weights(self,paths,weight=1):
         for path in paths:
-            """recompute agent infos for old data"""
-            """(necessary for correct reuse of old data)"""
             path["weights"] = weight * np.ones_like(path["rewards"])
             self.update_agent_infos(path)
             self.compute_and_apply_importance_weights(path)
@@ -295,13 +258,6 @@ class BatchSamplerSafe(Sampler):
  
 
     def update_agent_infos(self,path):
-        """
-        this updates the agent dist infos (i.e, mean & variance of Gaussian policy dist)
-        so that it can compute the probability of taking these actions on the most recent
-        policy is.
-        meanwhile, the log likelihood of taking the actions on the original behavior policy
-        can still be found in path["log_likelihood"].
-        """
         state_info_list = [path["agent_infos"][k] for k in self.algo.policy.state_info_keys]
         input_list = tuple([path["observations"]] + state_info_list)
         cur_dist_info = self.algo.dist_info_vars_func(*input_list)
@@ -432,8 +388,6 @@ class BatchSamplerSafe(Sampler):
                 samples_data['safety_values'] = safety_vals
 
         if self.algo.safety_constraint:
-            # logic currently only supports linearization constant calculated on most recent batch of data
-            # because importance sampling is complicated
             if self.algo.safety_key == 'safety_rewards':
                 if self.use_safety_bonus:
                     key = 'safety_robust_rewards'
@@ -458,8 +412,6 @@ class BatchSamplerSafe(Sampler):
 
 
     def record_statistics(self, itr, paths, evs, samples_data): 
-
-        # Compute statistics for new paths
         average_discounted_return = \
             np.mean([path["returns"][0] for path in self.experience_replay[-1]])
 
@@ -470,11 +422,6 @@ class BatchSamplerSafe(Sampler):
                             )
         ent = np.mean(self.algo.policy.distribution.entropy(agent_infos))
 
-
-        # log everything
-        logger.record_tabular('Iteration', itr)
-        logger.record_tabular('AverageDiscountedReturn',
-                              average_discounted_return)
         logger.record_tabular('AverageReturn', np.mean(undiscounted_returns))
         if self.algo.safety_constraint and self.algo.safety_tradeoff:
             average_discounted_tradeoff_return = \
@@ -482,23 +429,6 @@ class BatchSamplerSafe(Sampler):
 
             average_undiscounted_tradeoff_return = \
                 np.mean([sum(path["tradeoff_rewards"]) for path in self.experience_replay[-1]])
-
-            logger.record_tabular('AverageDiscountedTradeoffReturn',
-                                  average_discounted_tradeoff_return)
-            logger.record_tabular('AverageTradeoffReturn',
-                                  average_undiscounted_tradeoff_return)
-        logger.record_tabular('ExplainedVariance', evs[0])
-        logger.record_tabular('NumBatches',len(self.experience_replay))
-        logger.record_tabular('NumTrajs', len(paths))
-        logger.record_tabular('MeanPathLen',self.mean_path_len)
-        #logger.record_tabular('MeanWeight',np.mean(samples_data['weights']))
-        logger.record_tabular('EnvInteracts',self.env_interacts)
-        logger.record_tabular('TotalEnvInteracts',self.total_env_interacts)
-        logger.record_tabular('Entropy', ent)
-        logger.record_tabular('Perplexity', np.exp(ent))
-        logger.record_tabular('StdReturn', np.std(undiscounted_returns))
-        logger.record_tabular('MaxReturn', np.max(undiscounted_returns))
-        logger.record_tabular('MinReturn', np.min(undiscounted_returns))
 
         if self.algo.batch_aggregate_n > 1:
             for age in range(self.algo.batch_aggregate_n):
@@ -527,46 +457,29 @@ class BatchSamplerSafe(Sampler):
 
         if self.algo.exploration_bonus:
             bonuses = tensor_utils.concat_tensor_list([path["bonuses"] for path in paths])
-            logger.record_tabular('MeanRawBonus',self.bonus_mean)
-            logger.record_tabular('MeanBonus',np.mean(bonuses))
-            logger.record_tabular('StdBonus',np.std(bonuses))
-            logger.record_tabular('MaxBonus',np.max(bonuses))
+            
             bonus_sums = np.array([np.sum(path["bonuses"]) for path in paths])
-            logger.record_tabular('MeanBonusSum', np.mean(bonus_sums))
-            logger.record_tabular('StdBonusSum', np.std(bonus_sums))
+            
             if self.algo.batch_aggregate_n > 1:
                 new_bonuses = tensor_utils.concat_tensor_list(
                             [path["bonuses"] for path in self.experience_replay[-1]]
                             )
-                logger.record_tabular('NewPathsMeanBonus',np.mean(new_bonuses))
-                logger.record_tabular('NewPathsStdBonus',np.std(new_bonuses))
-                logger.record_tabular('NewPathsMaxBonus',np.max(new_bonuses))
 
         if self.algo.safety_constraint:
-            logger.record_tabular('SafetyEval',samples_data['safety_eval'])
             """log the true, raw, undiscounted returns, regardless of what we optimize for"""
             safety_returns = np.array([np.sum(path["safety_rewards"]) for path in paths])
-            logger.record_tabular('MeanSafety[U]Return', np.mean(safety_returns))
-            logger.record_tabular('StdSafety[U]Return', np.std(safety_returns))
-            logger.record_tabular('MaxSafety[U]Return', np.max(safety_returns))
+            
 
             if self.algo.batch_aggregate_n > 1:
                 new_safety_returns = np.array([np.sum(path["safety_rewards"]) for path in self.experience_replay[-1]])
-                logger.record_tabular('NewPathsMeanSafety[U]Return',np.mean(new_safety_returns))
-                logger.record_tabular('NewPathsStdSafety[U]Return',np.std(new_safety_returns))
-                logger.record_tabular('NewPathsMaxSafety[U]Return',np.max(new_safety_returns))
+                
 
             if self.use_safety_bonus:
                 safety_robust_returns = np.array([np.sum(path["safety_robust_rewards"]) for path in paths])
-                logger.record_tabular('MeanRobustSafety[U]Return', np.mean(safety_robust_returns))
-                logger.record_tabular('StdRobustSafety[U]Return', np.std(safety_robust_returns))
-                logger.record_tabular('MaxRobustSafety[U]Return', np.max(safety_robust_returns))
+                
 
                 if self.algo.batch_aggregate_n > 1:
                     new_safety_robust_returns = np.array([np.sum(path["safety_robust_rewards"]) for path in self.experience_replay[-1]])
-                    logger.record_tabular('NewPathsMeanRobustSafety[U]Return', np.mean(new_safety_robust_returns))
-                    logger.record_tabular('NewPathsStdRobustSafety[U]Return', np.std(new_safety_robust_returns))
-                    logger.record_tabular('NewPathsMaxRobustSafety[U]Return', np.max(new_safety_robust_returns))
 
 
     def get_IS(self,age):
@@ -577,18 +490,10 @@ class BatchSamplerSafe(Sampler):
 
 
     def update_parametrized_models(self):
-        """only most recent batch of data is used to fit models"""
-
-        logger.log("fitting objective baseline with target_key=" + self.algo.baseline._target_key + "...")
         self.algo.baseline.fit(self.experience_replay[-1])
-        logger.log("fitted")
 
         if self.algo.exploration_bonus:
-            logger.log("fitting exploration bonus model...")
             self.algo.exploration_bonus.fit(self.experience_replay[-1])
-            logger.log("fitted")
 
         if self.algo.safety_constraint:
-            logger.log("fitting safety constraint model...")
             self.algo.safety_constraint.fit(self.experience_replay[-1])
-            logger.log("fitted")

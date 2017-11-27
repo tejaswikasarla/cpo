@@ -18,24 +18,6 @@ import theano.tensor as TT
 from sandbox.cpo.sampler_safe import BatchSamplerSafe
 
 class PolicyGradientSafe(BatchPolopt, Serializable):
-    """
-    Policy Gradient base algorithm
-
-    with optional data reuse and importance sampling,
-    and exploration bonuses
-
-    also with safety constraints
-
-    Can use this as a base class for VPG, ERWR, TNPG, TRPO, etc. by picking appropriate optimizers / arguments
-
-    for VPG: use FirstOrderOptimizer
-    for ERWR: set positive_adv to True
-    for TNPG: use ConjugateGradient optimizer with max_backtracks=1
-    for TRPO: use ConjugateGradient optimizer with max_backtracks>1
-    for PPO: use PenaltyLBFGS optimzer
-
-    """
-
     def __init__(
             self,
             optimizer=None,
@@ -75,28 +57,6 @@ class PolicyGradientSafe(BatchPolopt, Serializable):
             IS_coeff_lower_bound=0,
             **kwargs):
 
-
-        """
-        :param batch_aggregate_n: use this many epochs of data (including current)
-        :param batch_aggregate_coeff: used to make contribution of old data smaller. formula:
-
-            If a batch has age j, it is weighted proportionally to
-
-                                          batch_aggregate_coeff ** j,
-
-            with these batch weights normalized.
-
-            If you want every batch to have equal weight, set batch_aggregate_coeff = 1. 
-
-        :param relative_weights: used to make contribution of old data invariant to how many
-                                 more or fewer trajectories the old batch may have.
-        :param importance_sampling: do or do not use importance sampling to reweight old data
-        :param clip_IS_coeff: if true, clip the IS coefficients.
-        :param IS_coeff_bound: if clip_IS_coeff, then IS coefficients are bounded by this value. 
-        :param decision_weight_mode: either 'pd', per decision, or 'pt', per trajectory
-
-        """
-
         Serializable.quick_init(self, locals())
 
         self.optimizer = optimizer
@@ -128,13 +88,7 @@ class PolicyGradientSafe(BatchPolopt, Serializable):
         self.safety_tradeoff_coeff = 1. * safety_tradeoff_coeff 
         self.learn_safety_tradeoff_coeff = learn_safety_tradeoff_coeff
         self.safety_tradeoff_coeff_lr = safety_tradeoff_coeff_lr
-        self.pdo_vf_mode = pdo_vf_mode      #1 = one VF for R + alpha*S 
-                                            #2 = two VFs (one for R, one for S)
-                                            #Experiments in the paper use mode 1,
-                                            #although I tried out both. 
-                                            #(Mode 2 seemed less stable.)
-
-        # entropy regularization
+        self.pdo_vf_mode = pdo_vf_mode      
         self.entropy_regularize = entropy_regularize
         self.entropy_coeff = entropy_coeff
         self.entropy_coeff_decay = entropy_coeff_decay
@@ -227,11 +181,6 @@ class PolicyGradientSafe(BatchPolopt, Serializable):
                 log_name="dist_info_vars"
             )
 
-        # when we want to get D_KL( pi' || pi) for data that was sampled on 
-        # some behavior policy pi_b, where pi' is the optimization variable
-        # and pi is the policy of the previous iteration,
-        # the dist_info in memory will correspond to pi_b and not pi. 
-        # so we have to compute the dist_info for that data on pi, on the fly.
 
         ent = dist.entropy_sym(dist_info_vars)
         kl = dist.kl_sym(old_dist_info_vars, dist_info_vars)
@@ -321,26 +270,6 @@ class PolicyGradientSafe(BatchPolopt, Serializable):
             all_input_values += tuple(ext.extract(samples_data,"safety_values"))
             self.safety_gradient_rescale.set_value(samples_data['safety_rescale'])
             logger.record_tabular('SafetyGradientRescale', self.safety_gradient_rescale.get_value())
-            """
-            I think this one is worth some explanation. The surrogate function is computed by taking
-            an average of likelihood ratios times safety advantages. IE, it is a sample expectation 
-            over state-action pairs. Suppose we have N trajectories of length T. Then the surrogate is
-
-                surrogate = (1 / NT) * sum_{j=1}^N sum_{t=1}^T lr(j,t) * adv(j,t)
-
-            But the true safety constraint function is an expectation over /trajectories/, not state-action
-            pairs. 
-
-                true constraint = (1 / N) * sum_{j=1}^N sum_{t=1}^T lr(j,t) * adv(j,t)
-                                = T * surrogate
-
-            So the gradient of the surrogate is (1 / T) times the gradient of the true constraint. 
-            In normal policy gradient situations, this isn't a problem, because we only care about the
-            direction and not the magnitude. But, our safety constraint formulation crucially relies
-            on this gradient having the correct magnitude! So we have to rescale appropriately. 
-            The "SafetyGradientRescale" is automatically computed by the sampler and provided to 
-            the optimizer.
-            """
 
         agent_infos = samples_data["agent_infos"]
         state_info_list = [agent_infos[k] for k in self.policy.state_info_keys]
@@ -379,19 +308,8 @@ class PolicyGradientSafe(BatchPolopt, Serializable):
 
         if self.learn_safety_tradeoff_coeff:
             delta = samples_data['safety_eval'] - self.safety_step_size
-            logger.record_tabular('TradeoffCoeffBefore',self.safety_tradeoff_coeff)
             self.safety_tradeoff_coeff += self.safety_tradeoff_coeff_lr * delta
             self.safety_tradeoff_coeff = max(0, self.safety_tradeoff_coeff)
-            logger.record_tabular('TradeoffCoeffAfter',self.safety_tradeoff_coeff)
-            
-        logger.record_tabular('Time',time.time() - self.start_time)
-        logger.record_tabular('LossBefore', loss_before)
-        logger.record_tabular('LossAfter', loss_after)
-        logger.record_tabular('MeanKL', mean_kl)
-        logger.record_tabular('MaxKL', max_kl)
-        logger.record_tabular('dLoss', loss_before - loss_after)
-        logger.log('optimization finished')
-
 
     @overrides
     def get_itr_snapshot(self, itr, samples_data):
